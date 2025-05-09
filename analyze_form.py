@@ -5,13 +5,23 @@ import json
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup # Import BeautifulSoup for HTML parsing
 from html_processor import extract_form_sections # Import the new function
+from llm_agent import generate_playbook # Import the LLM agent function
+from playbook_manager import load_playbook, save_playbook # Import playbook manager functions
+from urllib.parse import urlparse # Import urlparse to extract domain
 
 # Load environment variables from .env file
 load_dotenv()
 
+# Check if the API key was loaded
+openai_api_key = os.getenv("OPENAI_API_KEY")
+if not openai_api_key:
+    print("[ERROR] OPENAI_API_KEY environment variable not found after loading .env")
+    # Depending on desired behavior, you might exit or raise an error here.
+    # For now, we'll proceed, but the OpenAI client initialization will likely fail.
+
 # Configure OpenAI API (ensure your API key is set as an environment variable)
 # The API key is typically read from the OPENAI_API_KEY environment variable.
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(api_key=openai_api_key)
 
 def analyze_form_page(html_content: str, screenshot_path: str = None) -> dict:
     """
@@ -78,17 +88,47 @@ def analyze_form_page(html_content: str, screenshot_path: str = None) -> dict:
 
 # Example usage (if standalone test):
 if __name__ == "__main__":
-    # Read an HTML file (captured in previous step) and analyze it.
-    # Use the actual path to the captured HTML
-    sample_html_path = "screenshots/application_step1.html"
-    # Assuming a screenshot is also available at this path
-    sample_screenshot_path = "screenshots/application_step1.png"
+    # Example usage demonstrating playbook caching
+    # In a real application, you would get the URL and HTML from the browser automation step
 
-    if os.path.exists(sample_html_path):
-        with open(sample_html_path, "r", encoding="utf-8") as f:
-            html_data = f.read()
-        # Pass both html_data and sample_screenshot_path to the function
-        actions = analyze_form_page(html_data, sample_screenshot_path)
-        print("Actions JSON:", json.dumps(actions, indent=2))
+    # Define a sample URL and HTML path for demonstration
+    sample_url = "https://www.example.com/job/application"
+    sample_html_path = "screenshots/application_step1.html" # Use an existing sample HTML
+
+    # Extract domain from the sample URL
+    domain = urlparse(sample_url).netloc
+    print(f"Processing form for domain: {domain}")
+
+    # Attempt to load playbook from cache
+    playbook = load_playbook(domain)
+
+    if playbook is None:
+        print("No cached playbook found. Generating new playbook...")
+        # Read the sample HTML content
+        if os.path.exists(sample_html_path):
+            with open(sample_html_path, "r", encoding="utf-8") as f:
+                html_data = f.read()
+
+            # Extract form sections using html_processor
+            extracted_sections = extract_form_sections(html_data)
+
+            # Generate playbook using llm_agent
+            # Note: analyze_form_page function is not used directly here as we are
+            # demonstrating the caching logic that would wrap it.
+            playbook = generate_playbook(extracted_sections)
+
+            # Save the generated playbook to cache
+            if playbook: # Only save if playbook generation was successful
+                save_playbook(domain, playbook)
+        else:
+            print(f"Sample HTML not found at {sample_html_path}. Cannot generate playbook.")
+            playbook = None # Ensure playbook is None if HTML not found
     else:
-        print(f"Sample HTML not found at {sample_html_path}. Please ensure the file exists.")
+        print("Using cached playbook.")
+
+    # Print the resulting playbook
+    if playbook:
+        print("\nFinal Playbook:")
+        print(json.dumps(playbook, indent=2))
+    else:
+        print("\nFailed to obtain a playbook.")

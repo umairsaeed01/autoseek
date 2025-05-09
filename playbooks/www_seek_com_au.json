@@ -1,0 +1,34 @@
+[
+  {
+    "action": "click",
+    "selector": "input[name='resume-method'][value='upload']",
+    "field": "Select upload resum\u00e9 option"
+  },
+  {
+    "action": "upload",
+    "selector": "input[type='file']",
+    "field": "Upload resum\u00e9 file",
+    "value": "[RESUME_PATH]"
+  },
+  {
+    "action": "click",
+    "selector": "button:contains('Upload')",
+    "field": "Upload resum\u00e9 button"
+  },
+  {
+    "action": "click",
+    "selector": "input[name='coverLetter-method'][value='upload']",
+    "field": "Select upload cover letter option"
+  },
+  {
+    "action": "upload",
+    "selector": "input[type='file']",
+    "field": "Upload cover letter file",
+    "value": "[COVER_LETTER_PATH]"
+  },
+  {
+    "action": "click",
+    "selector": "button:contains('Upload')",
+    "field": "Upload cover letter button"
+  }
+]

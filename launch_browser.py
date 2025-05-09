@@ -1,91 +1,139 @@
 import os
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.common.by import By
 import time
-from page_capture import save_page_snapshot # Import the new function
-from analyze_form import analyze_form_page
 import json
-from bs4 import BeautifulSoup # Import BeautifulSoup
-# Load user profile for Chrome to maintain login (update the path to your actual profile).
-# On macOS, Chrome profiles are typically under "~/Library/Application Support/Google/Chrome".
-user_data_dir = "/Users/umairsaeed/Library/Application Support/Google/Chrome"
-profile_dir = "Default"  # or use your custom profile name if not the default
+from bs4 import BeautifulSoup
+from urllib.parse import urlparse
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
-# Configure Chrome options to use the profile
-options = Options()
-options.add_argument(f"--user-data-dir={user_data_dir}")
-options.add_argument(f"--profile-directory={profile_dir}")
-options.add_argument("--start-maximized")  # open browser maximized
+from page_capture import save_page_snapshot
+from analyze_form import analyze_form_page
+from playbook_manager import load_playbook, save_playbook
+from playbook_executor import execute_playbook_actions
 
-# Initialize WebDriver (Chrome) with the specified options.
-# This will launch Chrome with the given user profile.
-service = Service(ChromeDriverManager().install())  # automatically install/update chromedriver
-driver = webdriver.Chrome(service=service, options=options)
+RESUME_PATH = os.path.abspath("./resume.pdf")
+COVER_LETTER_PATH = os.path.abspath("./cover_letter.pdf")
 
-job_id = "seek_application" # Define a job ID
-step_counter = 0 # Initialize step counter
+def main():
+    profile_path = "/Users/umairsaeed/Library/Application Support/Firefox/Profiles/4219wmga.default-release"
 
-try:
-    # Navigate to the job posting URL on Seek
-    job_url = "https://www.seek.com.au/job/83589298"  # TODO: replace with actual job URL
-    print(f"Opening job page: {job_url}")
-    driver.get(job_url)
-    time.sleep(5)  # wait for page to fully load (adjust delay as needed or use WebDriver waits)
-    step_counter += 1
+    options = FirefoxOptions()
+    options.set_preference("dom.webnotifications.enabled", False)
+    options.add_argument("--width=1280")
+    options.add_argument("--height=900")
+    options.profile = profile_path  # Proper way to use existing Firefox profile
 
-    # Extract job title
-    soup = BeautifulSoup(driver.page_source, 'html.parser')
-    job_title_element = soup.select_one('h1._15uaf0e0._1li239b4z._15gbqyr0._15gbqyrl.ni6qyg4._15gbqyrp._15gbqyr21')
-    job_title = job_title_element.get_text(strip=True) if job_title_element else 'N/A'
+    print("Initializing Firefox Service...")
+    service = FirefoxService()
+    print("Firefox Service initialized.")
 
-    # Capture after navigation and get the saved file paths
-    html_path_nav, screenshot_path_nav = save_page_snapshot(driver, job_id, job_title, f"nav_{step_counter}")
+    print("Launching Firefox with personal profile...")
+    driver = webdriver.Firefox(service=service, options=options)
+    print("Firefox WebDriver initialized successfully.")
 
-    # Click the "Apply" button on the job page.
-    # Assuming the apply button can be found by text or a data-automation attribute.
-    apply_button = driver.find_element(By.XPATH, "//a[contains(., 'Apply') or contains(., 'apply')]")
-    print("Clicking the Apply button...")
-    apply_button.click()
-    time.sleep(5)  # wait for redirect to application form
-    step_counter += 1
-    # Capture after clicking apply and get the saved file paths
-    html_path_click, screenshot_path_click = save_page_snapshot(driver, job_id, job_title, f"click_apply_{step_counter}")
+    driver.implicitly_wait(10)
+    job_id = "seek_application"
+    job_title = "N-A"
+    step_counter = 0
 
-    print("Apply button clicked, should be on application form page now.")
+    try:
+        job_url = "https://www.seek.com.au/job/83589298"
+        print(f"Opening job page: {job_url}")
+        driver.get(job_url)
 
-    # Read the captured HTML file using the path returned by save_page_snapshot
-    # Read the captured HTML file using the path returned by save_page_snapshot
-    html_file_path = html_path_click # Use the path returned from the last capture
-    screenshot_path = screenshot_path_click # Use the path returned from the last capture
+        print("Waiting for Apply button...")
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.XPATH, "//a[contains(., 'Apply') or contains(., 'apply')]"))
+        )
+        step_counter += 1
 
-    if os.path.exists(html_file_path):
-        with open(html_file_path, "r", encoding="utf-8") as f:
-            captured_html = f.read()
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        job_title_element = soup.select_one('h1')
+        job_title = job_title_element.get_text(strip=True) if job_title_element else 'N-A'
 
-        # Truncate HTML content to avoid exceeding token limits
-        max_html_length = 400000  # Adjust as needed based on model token limits
-        truncated_html = captured_html[:max_html_length]
-        print(f"Truncated HTML content to {len(truncated_html)} characters.")
+        save_page_snapshot(driver, job_id, job_title, f"nav_{step_counter}")
 
-        # Analyze the captured HTML using the LLM
-        print(f"Analyzing captured HTML from: {html_file_path}")
-        # Pass the screenshot path as well if analyze_form_page uses it
-        form_actions = analyze_form_page(truncated_html, screenshot_path)
+        apply_button = driver.find_element(By.XPATH, "//a[contains(., 'Apply') or contains(., 'apply')]")
+        print("Clicking Apply...")
+        apply_button.click()
+        time.sleep(5)
+        step_counter += 1
 
-        # Print the analysis result
-        print("LLM Analysis Result (Form Actions):")
-        print(json.dumps(form_actions, indent=2))
-    else:
-        print(f"[Error] Captured HTML file not found: {html_file_path}")
+        visited_states = set()
+        domain_safe = None
 
+        while True:
+            current_url = driver.current_url
+            domain = urlparse(current_url).netloc
+            print(f"Current domain: {domain}")
+            html_file_path, screenshot_path = save_page_snapshot(driver, job_id, job_title, f"step_{step_counter}")
 
-except Exception as e:
-    print(f"[Error] Exception during launching or clicking apply: {e}")
-    driver.quit()
-    raise
+            if os.path.exists(html_file_path):
+                with open(html_file_path, "r", encoding="utf-8") as f:
+                    current_html = f.read()
+                if "application submitted" in current_html.lower():
+                    print("Application submitted.")
+                    break
+            else:
+                print(f"[Error] HTML not found: {html_file_path}")
 
-# At this point, the browser should have navigated into the first step of the application form.
-# (We will capture the form in the next step.)
+            if domain_safe is None:
+                domain_safe = "".join(c if c.isalnum() else "_" for c in domain)
+
+            playbook = load_playbook(domain)
+            if playbook is None:
+                print("Generating new playbook...")
+                with open(html_file_path, "r", encoding="utf-8") as f:
+                    captured_html = f.read()
+                truncated_html = captured_html[:400000]
+                playbook = analyze_form_page(truncated_html, screenshot_path)
+                if playbook:
+                    save_playbook(domain, playbook)
+                else:
+                    print("Playbook generation failed.")
+                    break
+
+            if playbook and 'actions' in playbook:
+                success = execute_playbook_actions(driver, playbook['actions'], RESUME_PATH, COVER_LETTER_PATH)
+                if not success:
+                    print("Failed to execute actions.")
+                    break
+            else:
+                print("Playbook has no actions.")
+
+            old_url = driver.current_url
+            old_html_len = len(driver.page_source)
+            print("Waiting for page change...")
+            content_changed = False
+            for _ in range(15):
+                time.sleep(1)
+                if driver.current_url != old_url or len(driver.page_source) != old_html_len:
+                    content_changed = True
+                    break
+
+            if not content_changed:
+                print("No page change detected. Exiting.")
+                break
+
+            state_signature = hash(driver.current_url + "_" + str(len(driver.page_source)))
+            if state_signature in visited_states:
+                print("Detected a loop. Exiting.")
+                break
+            visited_states.add(state_signature)
+
+            step_counter += 1
+            print(f"Step {step_counter} complete.")
+
+    except Exception as e:
+        print(f"[Error] {e}")
+    finally:
+        driver.quit()
+        print("Browser closed.")
+
+if __name__ == "__main__":
+    main()

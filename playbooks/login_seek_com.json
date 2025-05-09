@@ -1,0 +1,28 @@
+[
+  {
+    "action": "fill",
+    "selector": "input[name='emailAddress_seekanz']",
+    "field": "email address",
+    "value": "[EMAIL]"
+  },
+  {
+    "action": "click",
+    "selector": "button",
+    "field": "Email me a sign in code"
+  },
+  {
+    "action": "click",
+    "selector": "button",
+    "field": "Continue with Google"
+  },
+  {
+    "action": "click",
+    "selector": "button",
+    "field": "Continue with Facebook"
+  },
+  {
+    "action": "click",
+    "selector": "button",
+    "field": "Continue with Apple"
+  }
+]
