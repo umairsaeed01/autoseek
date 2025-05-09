@@ -1,34 +1,139 @@
-[
-  {
-    "action": "click",
-    "selector": "input[name='resume-method'][value='upload']",
-    "field": "Select upload resum\u00e9 option"
-  },
-  {
-    "action": "upload",
-    "selector": "input[type='file']",
-    "field": "Upload resum\u00e9 file",
-    "value": "[RESUME_PATH]"
-  },
-  {
-    "action": "click",
-    "selector": "button:contains('Upload')",
-    "field": "Upload resum\u00e9 button"
-  },
-  {
-    "action": "click",
-    "selector": "input[name='coverLetter-method'][value='upload']",
-    "field": "Select upload cover letter option"
-  },
-  {
-    "action": "upload",
-    "selector": "input[type='file']",
-    "field": "Upload cover letter file",
-    "value": "[COVER_LETTER_PATH]"
-  },
-  {
-    "action": "click",
-    "selector": "button:contains('Upload')",
-    "field": "Upload cover letter button"
-  }
-]
+{
+  "actions": [
+    {
+      "action": "click",
+      "selector": "input[type='radio'][name='resume-method'][value='upload']",
+      "field": "Select upload resume option"
+    },
+    {
+      "action": "upload",
+      "selector": "input[type='file']",
+      "field": "Resume file upload",
+      "value": "[RESUME_PATH]"
+    },
+    {
+      "action": "click",
+      "selector": "button:contains('Upload')",
+      "field": "Upload resume button"
+    },
+    {
+      "action": "click",
+      "selector": "input[type='radio'][name='coverLetter-method'][value='upload']",
+      "field": "Select upload cover letter option"
+    },
+    {
+      "action": "upload",
+      "selector": "input[type='file']",
+      "field": "Cover letter file upload",
+      "value": "[COVER_LETTER_PATH]"
+    },
+    {
+      "action": "click",
+      "selector": "button:contains('Upload')",
+      "field": "Upload cover letter button"
+    },
+    {
+      "action": "click",
+      "selector": "input[name='resume-method'][value='upload']",
+      "field": "Upload a resum\u00e9"
+    },
+    {
+      "action": "upload",
+      "selector": "input[type='file']",
+      "field": "Resum\u00e9 file",
+      "value": "[RESUME_PATH]"
+    },
+    {
+      "action": "click",
+      "selector": "input[name='coverLetter-method'][value='upload']",
+      "field": "Upload a cover letter"
+    },
+    {
+      "action": "upload",
+      "selector": "input[type='file']",
+      "field": "Cover letter file",
+      "value": "[COVER_LETTER_PATH]"
+    },
+    {
+      "action": "click",
+      "selector": "button",
+      "field": "Upload"
+    },
+    {
+      "action": "click",
+      "selector": "input[name='resume-method'][value='upload']",
+      "field": "Resum\u00e9 upload method"
+    },
+    {
+      "action": "upload",
+      "selector": "input[type='file']",
+      "field": "Resum\u00e9 file",
+      "value": "[RESUME_PATH]"
+    },
+    {
+      "action": "click",
+      "selector": "input[name='coverLetter-method'][value='upload']",
+      "field": "Cover letter upload method"
+    },
+    {
+      "action": "upload",
+      "selector": "input[type='file']",
+      "field": "Cover letter file",
+      "value": "[COVER_LETTER_PATH]"
+    },
+    {
+      "action": "click",
+      "selector": "input[name='resume-method'][value='upload']",
+      "field": "Resum\u00e9 upload method"
+    },
+    {
+      "action": "upload",
+      "selector": "input[type='file']",
+      "field": "Resum\u00e9 file",
+      "value": "[RESUME_PATH]"
+    },
+    {
+      "action": "click",
+      "selector": "input[name='coverLetter-method'][value='upload']",
+      "field": "Cover letter upload method"
+    },
+    {
+      "action": "upload",
+      "selector": "input[type='file']",
+      "field": "Cover letter file",
+      "value": "[COVER_LETTER_PATH]"
+    },
+    {
+      "action": "click",
+      "selector": "button",
+      "field": "Upload button"
+    },
+    {
+      "action": "click",
+      "selector": "input[name='resume-method'][value='upload']",
+      "field": "Resum\u00e9 upload method"
+    },
+    {
+      "action": "upload",
+      "selector": "input[type='file']",
+      "field": "Resum\u00e9 file",
+      "value": "[RESUME_PATH]"
+    },
+    {
+      "action": "click",
+      "selector": "input[name='coverLetter-method'][value='upload']",
+      "field": "Cover letter upload method"
+    },
+    {
+      "action": "upload",
+      "selector": "input[type='file']",
+      "field": "Cover letter file",
+      "value": "[COVER_LETTER_PATH]"
+    },
+    {
+      "action": "click",
+      "selector": "button",
+      "field": "Upload button"
+    }
+  ]
+}

@@ -13,6 +13,8 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from page_capture import save_page_snapshot
 from analyze_form import analyze_form_page
+import html_processor  # This was missing!
+
 from playbook_manager import load_playbook, save_playbook
 from playbook_executor import execute_playbook_actions
 
@@ -64,74 +66,127 @@ def main():
         time.sleep(5)
         step_counter += 1
 
+        # Start the application process loop
         visited_states = set()
+        executed_action_keys = set() # Track executed actions
         domain_safe = None
+        max_steps = 10 # Limit the total number of steps to prevent infinite loops
 
-        while True:
+        while step_counter < max_steps:
             current_url = driver.current_url
             domain = urlparse(current_url).netloc
+            print(f"\n--- Processing Step {step_counter + 1} ---")
+            print(f"Current URL: {current_url}")
             print(f"Current domain: {domain}")
-            html_file_path, screenshot_path = save_page_snapshot(driver, job_id, job_title, f"step_{step_counter}")
 
-            if os.path.exists(html_file_path):
-                with open(html_file_path, "r", encoding="utf-8") as f:
-                    current_html = f.read()
-                if "application submitted" in current_html.lower():
-                    print("Application submitted.")
-                    break
-            else:
-                print(f"[Error] HTML not found: {html_file_path}")
-
-            if domain_safe is None:
-                domain_safe = "".join(c if c.isalnum() else "_" for c in domain)
-
-            playbook = load_playbook(domain)
-            if playbook is None:
-                print("Generating new playbook...")
-                with open(html_file_path, "r", encoding="utf-8") as f:
-                    captured_html = f.read()
-                truncated_html = captured_html[:400000]
-                playbook = analyze_form_page(truncated_html, screenshot_path)
-                if playbook:
-                    save_playbook(domain, playbook)
-                else:
-                    print("Playbook generation failed.")
-                    break
-
-            if playbook and 'actions' in playbook:
-                success = execute_playbook_actions(driver, playbook['actions'], RESUME_PATH, COVER_LETTER_PATH)
-                if not success:
-                    print("Failed to execute actions.")
-                    break
-            else:
-                print("Playbook has no actions.")
-
-            old_url = driver.current_url
-            old_html_len = len(driver.page_source)
-            print("Waiting for page change...")
-            content_changed = False
-            for _ in range(15):
-                time.sleep(1)
-                if driver.current_url != old_url or len(driver.page_source) != old_html_len:
-                    content_changed = True
-                    break
-
-            if not content_changed:
-                print("No page change detected. Exiting.")
-                break
-
-            state_signature = hash(driver.current_url + "_" + str(len(driver.page_source)))
+            # Prevent infinite loops by tracking page states (using URL and content length hash)
+            state_signature = hash(current_url + "_" + str(len(driver.page_source)))
             if state_signature in visited_states:
-                print("Detected a loop. Exiting.")
+                print("Detected a repeating page state (possible loop). Ending automation.")
                 break
             visited_states.add(state_signature)
 
+            # Capture the current page state
+            html_file_path, screenshot_path = save_page_snapshot(driver, job_id, job_title, f"step_{step_counter + 1}")
+
+            # Read current HTML for analysis and completion check
+            current_html = ""
+            if os.path.exists(html_file_path):
+                with open(html_file_path, "r", encoding="utf-8") as f:
+                    current_html = f.read()
+            else:
+                print(f"[Error] Captured HTML file not found: {html_file_path}. Cannot proceed.")
+                break
+
+            # Check for form completion
+            form_sections = html_processor.extract_form_sections(current_html)
+            if not form_sections:
+                print("No more form fields detected. Assuming application completed.")
+                # Optional: Add a final check for submission confirmation text here if desired
+                if "application submitted" in current_html.lower():
+                     print("Submission confirmation text also found.")
+                break # Exit the loop if no form sections are found
+
+            print(f"Found {len(form_sections)} form sections on the page.")
+
+            # Attempt to load existing playbook
+            playbook = load_playbook(domain)
+
+            actions_to_execute = []
+            if playbook and 'actions' in playbook:
+                print(f"Loaded existing playbook for {domain}.")
+                # Filter out already executed actions
+                for action in playbook['actions']:
+                    action_key = f"{action.get('action')}|{action.get('selector')}|{action.get('value')}" # Create a unique key for the action
+                    if action_key not in executed_action_keys:
+                        actions_to_execute.append(action)
+            else:
+                print(f"No existing playbook found for {domain} or playbook is empty.")
+                playbook = {"actions": []} # Initialize an empty playbook if none loaded
+
+            # If there are no pending actions in the loaded playbook or if form sections still exist, trigger LLM
+            if not actions_to_execute or form_sections:
+                 print("Generating new actions via LLM...")
+                 truncated_html = current_html[:400000] # Truncate HTML for LLM
+                 new_actions = analyze_form_page(truncated_html, screenshot_path)
+
+                 if new_actions:
+                     print(f"LLM generated {len(new_actions)} new actions.")
+                     # Append new actions to the playbook and save
+                     playbook['actions'].extend(new_actions)
+                     save_playbook(domain, playbook)
+                     print("Appended new actions to playbook and saved.")
+                     # Add newly generated actions to the list to be executed in this step
+                     actions_to_execute.extend(new_actions)
+                 else:
+                     print("[Error] LLM failed to generate new actions. Cannot proceed.")
+                     break # Exit loop if LLM fails
+
+            if actions_to_execute:
+                print(f"Executing {len(actions_to_execute)} actions...")
+                success = execute_playbook_actions(driver, actions_to_execute, RESUME_PATH, COVER_LETTER_PATH)
+                if not success:
+                    print(f"[Error] Playbook execution failed for {domain}. Stopping automation.")
+                    break # Stop the loop on failure
+                else:
+                    print("Finished executing actions.")
+                    # Mark executed actions
+                    for action in actions_to_execute:
+                         action_key = f"{action.get('action')}|{action.get('selector')}|{action.get('value')}"
+                         executed_action_keys.add(action_key)
+            else:
+                print("No actions to execute in this step.")
+
+
+            # After executing actions, wait briefly for the page to react
+            time.sleep(2) # Short pause
+
+            # Check if the page has changed or updated significantly after actions
+            # This is a simple check; more sophisticated checks might be needed for complex SPAs
+            new_url = driver.current_url
+            new_html_len = len(driver.page_source)
+            if new_url == current_url and new_html_len == len(current_html):
+                 print("Warning: Page content did not change after executing actions.")
+                 # Decide how to handle this - maybe break or try LLM again?
+                 # For now, we rely on the form_sections check at the start of the next loop iteration.
+            else:
+                 print("Page content updated.")
+
+
+            # Increment step counter
             step_counter += 1
-            print(f"Step {step_counter} complete.")
+
+        # Check if the loop exited due to max steps limit
+        if step_counter >= max_steps:
+            print(f"Maximum number of steps ({max_steps}) reached. Ending automation.")
+
 
     except Exception as e:
-        print(f"[Error] {e}")
+        print(f"[Error] An unexpected exception occurred during the application process: {e}")
+
     finally:
+        # Optional: Keep the browser open for inspection after completion or error
+        # input("Press Enter to close the browser...")
         driver.quit()
         print("Browser closed.")
 
