@@ -125,19 +125,23 @@ def main():
                 playbook = {"actions": []} # Initialize an empty playbook if none loaded
 
             # If there are no pending actions in the loaded playbook or if form sections still exist, trigger LLM
-            if not actions_to_execute or form_sections:
+            # Only generate new actions if there are form sections remaining AND either no actions were loaded
+            # or the loaded actions didn't resolve the form sections.
+            if form_sections and (not actions_to_execute or len(form_sections) > 0): # Refined condition
                  print("Generating new actions via LLM...")
                  truncated_html = current_html[:400000] # Truncate HTML for LLM
                  new_actions = analyze_form_page(truncated_html, screenshot_path)
 
                  if new_actions:
                      print(f"LLM generated {len(new_actions)} new actions.")
-                     # Append new actions to the playbook and save
-                     playbook['actions'].extend(new_actions)
+                     # Append new actions to the playbook and save, deduplicating against executed actions
+                     for action in new_actions:
+                         action_key = f"{action.get('action')}|{action.get('selector')}|{action.get('value')}"
+                         if action_key not in executed_action_keys:
+                             playbook['actions'].append(action) # Add to playbook for saving
+                             actions_to_execute.append(action) # Add to list for current execution
                      save_playbook(domain, playbook)
                      print("Appended new actions to playbook and saved.")
-                     # Add newly generated actions to the list to be executed in this step
-                     actions_to_execute.extend(new_actions)
                  else:
                      print("[Error] LLM failed to generate new actions. Cannot proceed.")
                      break # Exit loop if LLM fails
@@ -161,6 +165,38 @@ def main():
             # After executing actions, wait briefly for the page to react
             time.sleep(2) # Short pause
 
+            # Add Smart Page Navigation Detection (Right After Upload)
+            html_after_actions = driver.page_source.lower()
+
+            # Add a final check for application submission success
+            if "application has been submitted" in html_after_actions or "thanks for applying" in html_after_actions:
+                print("🎉 Detected successful job application submission. Ending automation.")
+                break
+
+            if (
+                "resume" in html_after_actions
+                and "cover letter" in html_after_actions
+                and any(x in html_after_actions for x in ["upload", "attach"])
+                and "application submitted" not in html_after_actions # Ensure we haven't already detected submission
+            ):
+                print("It looks like the application form did not advance. Checking for final action buttons...")
+
+                # Look for buttons that may indicate progression
+                possible_buttons = driver.find_elements(By.TAG_NAME, "button")
+                for button in possible_buttons:
+                    try:
+                        text = button.text.lower().strip()
+                        if text in ["next", "continue", "submit application", "submit", "apply now", "send"]:
+                            print(f"💡 Found possible navigation button: '{text}' — trying to click it")
+                            driver.execute_script("arguments[0].scrollIntoView(true);", button)
+                            time.sleep(1)
+                            button.click()
+                            time.sleep(3)
+                            break # Exit the button loop after clicking one
+                    except Exception as e:
+                        print(f"⚠️ Could not click navigation button: {e}")
+            # End Smart Page Navigation Detection
+
             # Check if the page has changed or updated significantly after actions
             # This is a simple check; more sophisticated checks might be needed for complex SPAs
             new_url = driver.current_url
@@ -172,6 +208,19 @@ def main():
             else:
                  print("Page content updated.")
 
+            # Add a Smart Loop Exit (Fail-Safe)
+            # Check for too many identical file upload steps
+            if step_counter > 4 and html_after_actions.count("resume") > 3 and html_after_actions.count("cover letter") > 3:
+                print("⚠️ Repeated upload step detected multiple times. Assuming the form is stuck. Ending.")
+                break
+            # End Smart Loop Exit
+
+            # Prevent infinite loops by tracking page states (using URL and content length hash)
+            state_signature = hash(driver.current_url + "_" + str(len(driver.page_source)))
+            if state_signature in visited_states:
+                print("Detected a repeating page state (possible loop). Ending automation.")
+                break
+            visited_states.add(state_signature)
 
             # Increment step counter
             step_counter += 1
