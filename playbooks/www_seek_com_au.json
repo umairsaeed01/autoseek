@@ -95,6 +95,76 @@
       "action": "click",
       "selector": "button:contains('Upload')",
       "field": "Upload cover letter button"
+    },
+    {
+      "action": "click",
+      "selector": "input[type='radio'][name='resume-method'][value='upload']",
+      "field": "Select upload resume option"
+    },
+    {
+      "action": "upload",
+      "selector": "input[type='file']",
+      "field": "resume file",
+      "value": "[RESUME_PATH]"
+    },
+    {
+      "action": "click",
+      "selector": "button:contains('Upload')",
+      "field": "Upload resume button"
+    },
+    {
+      "action": "click",
+      "selector": "input[type='radio'][name='coverLetter-method'][value='upload']",
+      "field": "Select upload cover letter option"
+    },
+    {
+      "action": "upload",
+      "selector": "input[type='file']",
+      "field": "cover letter file",
+      "value": "[COVER_LETTER_PATH]"
+    },
+    {
+      "action": "click",
+      "selector": "button:contains('Upload')",
+      "field": "Upload cover letter button"
+    },
+    {
+      "action": "click",
+      "selector": "input[name='resume-method'][value='upload']",
+      "field": "Select upload resume option",
+      "use_xpath": false
+    },
+    {
+      "action": "upload",
+      "selector": "input[type='file']",
+      "field": "Resume file upload",
+      "value": "[RESUME_PATH]",
+      "use_xpath": false
+    },
+    {
+      "action": "click",
+      "selector": "//button[contains(text(), 'Upload')]",
+      "field": "Upload resume button",
+      "use_xpath": true
+    },
+    {
+      "action": "click",
+      "selector": "input[name='coverLetter-method'][value='upload']",
+      "field": "Select upload cover letter option",
+      "use_xpath": false
+    },
+    {
+      "action": "upload",
+      "selector": "input[type='file']",
+      "field": "Cover letter file upload",
+      "value": "[COVER_LETTER_PATH]",
+      "use_xpath": false
+    },
+    {
+      "action": "click",
+      "selector": "//button[contains(text(), 'Upload')]",
+      "field": "Upload cover letter button",
+      "use_xpath": true
     }
   ]
 }

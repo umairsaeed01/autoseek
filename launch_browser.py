@@ -13,10 +13,32 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from page_capture import save_page_snapshot
 from analyze_form import analyze_form_page
-import html_processor  # This was missing!
+import html_processor
 
 from playbook_manager import load_playbook, save_playbook
 from playbook_executor import execute_playbook_actions
+
+import re # Import re for sanitize_actions
+
+def sanitize_actions(actions):
+    valid_actions = []
+    for action in actions:
+        selector = action.get("selector", "")
+        if ":contains(" in selector:
+            # Convert to XPath if we detect :contains
+            text_match = re.findall(r":contains\(['\"]?(.*?)['\"]?\)", selector)
+            if text_match:
+                text = text_match[0]
+                # Simple XPath fallback assuming it's a button
+                action["selector"] = f"//button[contains(text(), '{text}')]"
+                action["use_xpath"] = True
+            else:
+                print(f"Warning: Skipping malformed selector with :contains(): {selector}")
+                continue  # skip malformed
+        else:
+            action["use_xpath"] = False
+        valid_actions.append(action)
+    return valid_actions
 
 RESUME_PATH = os.path.abspath("./resume.pdf")
 COVER_LETTER_PATH = os.path.abspath("./cover_letter.pdf")
@@ -130,12 +152,16 @@ def main():
             if form_sections and (not actions_to_execute or len(form_sections) > 0): # Refined condition
                  print("Generating new actions via LLM...")
                  truncated_html = current_html[:400000] # Truncate HTML for LLM
-                 new_actions = analyze_form_page(truncated_html, screenshot_path)
+                 raw_new_actions = analyze_form_page(truncated_html, screenshot_path)
 
-                 if new_actions:
-                     print(f"LLM generated {len(new_actions)} new actions.")
+                 if raw_new_actions:
+                     print(f"LLM generated {len(raw_new_actions)} raw new actions.")
+                     # Sanitize and filter new actions
+                     sanitized_new_actions = sanitize_actions(raw_new_actions)
+                     print(f"Sanitized to {len(sanitized_new_actions)} valid actions.")
+
                      # Append new actions to the playbook and save, deduplicating against executed actions
-                     for action in new_actions:
+                     for action in sanitized_new_actions:
                          action_key = f"{action.get('action')}|{action.get('selector')}|{action.get('value')}"
                          if action_key not in executed_action_keys:
                              playbook['actions'].append(action) # Add to playbook for saving
