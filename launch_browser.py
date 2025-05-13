@@ -7,19 +7,22 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.service import Service as FirefoxService
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, WebDriverException, NoSuchElementException # Import NoSuchElementException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from page_capture import save_page_snapshot
 from analyze_form import analyze_form_page
-import html_processor
-
 from playbook_manager import load_playbook, save_playbook
 from playbook_executor import execute_playbook_actions
-
+import html_processor
+# Removed import for get_smart_step_summary
 import re # Import re for sanitize_actions
 
+RESUME_PATH = os.path.abspath("./resume.pdf")
+COVER_LETTER_PATH = os.path.abspath("./cover_letter.pdf")
+
+# Keep the sanitize_actions function
 def sanitize_actions(actions):
     valid_actions = []
     for action in actions:
@@ -40,8 +43,15 @@ def sanitize_actions(actions):
         valid_actions.append(action)
     return valid_actions
 
-RESUME_PATH = os.path.abspath("./resume.pdf")
-COVER_LETTER_PATH = os.path.abspath("./cover_letter.pdf")
+# Keep the wait_for_upload_completion function
+def wait_for_upload_completion(driver, keyword="uploaded", timeout=15):
+    try:
+        WebDriverWait(driver, timeout).until(lambda d: keyword in d.page_source.lower())
+        print("Upload completion detected.")
+        return True
+    except TimeoutException:
+        print("Upload completion NOT detected within timeout.")
+        return False
 
 def main():
     profile_path = "/Users/umairsaeed/Library/Application Support/Firefox/Profiles/4219wmga.default-release"
@@ -50,7 +60,7 @@ def main():
     options.set_preference("dom.webnotifications.enabled", False)
     options.add_argument("--width=1280")
     options.add_argument("--height=900")
-    options.profile = profile_path  # Proper way to use existing Firefox profile
+    options.profile = profile_path
 
     print("Initializing Firefox Service...")
     service = FirefoxService()
@@ -88,143 +98,130 @@ def main():
         time.sleep(5)
         step_counter += 1
 
-        # Start the application process loop
         visited_states = set()
-        executed_action_keys = set() # Track executed actions
+        executed_action_keys = set()
         domain_safe = None
-        max_steps = 10 # Limit the total number of steps to prevent infinite loops
+        max_steps = 10
 
         while step_counter < max_steps:
             current_url = driver.current_url
             domain = urlparse(current_url).netloc
             print(f"\n--- Processing Step {step_counter + 1} ---")
             print(f"Current URL: {current_url}")
-            print(f"Current domain: {domain}")
 
-            # Prevent infinite loops by tracking page states (using URL and content length hash)
             state_signature = hash(current_url + "_" + str(len(driver.page_source)))
             if state_signature in visited_states:
                 print("Detected a repeating page state (possible loop). Ending automation.")
                 break
             visited_states.add(state_signature)
 
-            # Capture the current page state
             html_file_path, screenshot_path = save_page_snapshot(driver, job_id, job_title, f"step_{step_counter + 1}")
 
-            # Read current HTML for analysis and completion check
-            current_html = ""
-            if os.path.exists(html_file_path):
-                with open(html_file_path, "r", encoding="utf-8") as f:
-                    current_html = f.read()
-            else:
-                print(f"[Error] Captured HTML file not found: {html_file_path}. Cannot proceed.")
+            if not os.path.exists(html_file_path):
+                print(f"[Error] HTML snapshot not found: {html_file_path}")
                 break
 
-            # Check for form completion
+            with open(html_file_path, "r", encoding="utf-8") as f:
+                current_html = f.read()
+
+            # Removed call to get_smart_step_summary
+
             form_sections = html_processor.extract_form_sections(current_html)
             if not form_sections:
-                print("No more form fields detected. Assuming application completed.")
-                # Optional: Add a final check for submission confirmation text here if desired
-                if "application submitted" in current_html.lower():
-                     print("Submission confirmation text also found.")
-                break # Exit the loop if no form sections are found
+                print("No form sections found. Assuming application complete or next step pending.")
+                break
 
             print(f"Found {len(form_sections)} form sections on the page.")
-
-            # Attempt to load existing playbook
             playbook = load_playbook(domain)
 
             actions_to_execute = []
             if playbook and 'actions' in playbook:
                 print(f"Loaded existing playbook for {domain}.")
-                # Filter out already executed actions
                 for action in playbook['actions']:
-                    action_key = f"{action.get('action')}|{action.get('selector')}|{action.get('value')}" # Create a unique key for the action
-                    if action_key not in executed_action_keys:
+                    key = f"{action.get('action')}|{action.get('selector')}|{action.get('value')}"
+                    if key not in executed_action_keys:
                         actions_to_execute.append(action)
             else:
-                print(f"No existing playbook found for {domain} or playbook is empty.")
-                playbook = {"actions": []} # Initialize an empty playbook if none loaded
+                playbook = {"actions": []}
 
-            # If there are no pending actions in the loaded playbook or if form sections still exist, trigger LLM
-            # Only generate new actions if there are form sections remaining AND either no actions were loaded
-            # or the loaded actions didn't resolve the form sections.
-            if form_sections and (not actions_to_execute or len(form_sections) > 0): # Refined condition
-                 print("Generating new actions via LLM...")
-                 truncated_html = current_html[:400000] # Truncate HTML for LLM
-                 raw_new_actions = analyze_form_page(truncated_html, screenshot_path)
+            if not actions_to_execute or form_sections:
+                print("Generating actions with LLM...")
+                try:
+                    truncated_html = current_html[:400000] # Truncate HTML for LLM
+                    raw_new_actions = analyze_form_page(truncated_html, screenshot_path) # Get raw actions
 
-                 if raw_new_actions:
-                     print(f"LLM generated {len(raw_new_actions)} raw new actions.")
-                     # Sanitize and filter new actions
-                     sanitized_new_actions = sanitize_actions(raw_new_actions)
-                     print(f"Sanitized to {len(sanitized_new_actions)} valid actions.")
+                    if raw_new_actions:
+                        print(f"LLM generated {len(raw_new_actions)} raw new actions.")
+                        # Sanitize the raw actions
+                        sanitized_new_actions = sanitize_actions(raw_new_actions)
+                        print(f"Sanitized to {len(sanitized_new_actions)} valid actions.")
 
-                     # Append new actions to the playbook and save, deduplicating against executed actions
-                     for action in sanitized_new_actions:
-                         action_key = f"{action.get('action')}|{action.get('selector')}|{action.get('value')}"
-                         if action_key not in executed_action_keys:
-                             playbook['actions'].append(action) # Add to playbook for saving
-                             actions_to_execute.append(action) # Add to list for current execution
-                     save_playbook(domain, playbook)
-                     print("Appended new actions to playbook and saved.")
-                 else:
-                     print("[Error] LLM failed to generate new actions. Cannot proceed.")
-                     break # Exit loop if LLM fails
+                        # Append sanitized actions to playbook and actions_to_execute
+                        for action in sanitized_new_actions:
+                            key = f"{action.get('action')}|{action.get('selector')}|{action.get('value')}"
+                            if key not in executed_action_keys:
+                                playbook['actions'].append(action)
+                                actions_to_execute.append(action)
+
+                        save_playbook(domain, playbook)
+                        print("Appended new actions to playbook and saved.")
+                    else:
+                        print("[Error] LLM failed to generate new actions. Cannot proceed.")
+                        break
+                except Exception as e:
+                    print(f"[Error] Failed to generate new actions via LLM: {e}")
+                    break
 
             if actions_to_execute:
                 print(f"Executing {len(actions_to_execute)} actions...")
-                success = execute_playbook_actions(driver, actions_to_execute, RESUME_PATH, COVER_LETTER_PATH)
-                if not success:
-                    print(f"[Error] Playbook execution failed for {domain}. Stopping automation.")
-                    break # Stop the loop on failure
-                else:
-                    print("Finished executing actions.")
-                    # Mark executed actions
-                    for action in actions_to_execute:
-                         action_key = f"{action.get('action')}|{action.get('selector')}|{action.get('value')}"
-                         executed_action_keys.add(action_key)
+                # Execute actions one by one to allow post-action review in executor
+                for idx, action in enumerate(actions_to_execute):
+                    action_key = f"{action.get('action')}|{action.get('selector')}|{action.get('value')}"
+                    if action_key in executed_action_keys:
+                        continue # Skip if already executed
+
+                    try:
+                        print(f"Executing action {idx+1}: {action.get('action')} - {action.get('field')}")
+                        # Pass only the current action to the executor
+                        single_action_success = execute_playbook_actions(driver, [action], RESUME_PATH, COVER_LETTER_PATH)
+                        if not single_action_success:
+                            print(f"[Error] Failed to execute action {action}")
+                            # Decide how to handle single action failure - break or continue?
+                            # For now, break the loop on failure
+                            break # Exit the actions execution loop
+                        executed_action_keys.add(action_key) # Mark as executed after successful execution
+
+                        # Add specific wait after upload
+                        if action.get("action") == "upload":
+                            wait_for_upload_completion(driver)
+
+                    except WebDriverException as ex:
+                        print(f"[Error] Unexpected error during action '{action.get('field')}': {ex}")
+                        # Decide how to handle unexpected WebDriver errors - break or continue?
+                        # For now, break the loop on error
+                        break # Exit the actions execution loop
+
+                # Check if the actions execution loop was broken due to failure
+                # If single_action_success is False, it means the inner loop broke
+                if 'single_action_success' in locals() and not single_action_success:
+                    break # Exit the main application loop if an action failed
+
+
             else:
                 print("No actions to execute in this step.")
 
+            # Note: The post-action snapshot and form section check logic is now primarily
+            # handled within the execute_playbook_actions function for each individual action.
+            # The loop will continue to the next step if execute_playbook_actions returns True.
 
-            # After executing actions, wait briefly for the page to react
-            time.sleep(2) # Short pause
 
-            # Add Smart Page Navigation Detection (Right After Upload)
-            html_after_actions = driver.page_source.lower()
+            # After executing actions (or if no actions), wait briefly before next step check
+            time.sleep(2)
 
-            # Add a final check for application submission success
-            if "application has been submitted" in html_after_actions or "thanks for applying" in html_after_actions:
-                print("🎉 Detected successful job application submission. Ending automation.")
-                break
-
-            if (
-                "resume" in html_after_actions
-                and "cover letter" in html_after_actions
-                and any(x in html_after_actions for x in ["upload", "attach"])
-                and "application submitted" not in html_after_actions # Ensure we haven't already detected submission
-            ):
-                print("It looks like the application form did not advance. Checking for final action buttons...")
-
-                # Look for buttons that may indicate progression
-                possible_buttons = driver.find_elements(By.TAG_NAME, "button")
-                for button in possible_buttons:
-                    try:
-                        text = button.text.lower().strip()
-                        if text in ["next", "continue", "submit application", "submit", "apply now", "send"]:
-                            print(f"💡 Found possible navigation button: '{text}' — trying to click it")
-                            driver.execute_script("arguments[0].scrollIntoView(true);", button)
-                            time.sleep(1)
-                            button.click()
-                            time.sleep(3)
-                            break # Exit the button loop after clicking one
-                    except Exception as e:
-                        print(f"⚠️ Could not click navigation button: {e}")
-            # End Smart Page Navigation Detection
-
-            # Check if the page has changed or updated significantly after actions
+            # Check if the page has changed or updated significantly before the next step
             # This is a simple check; more sophisticated checks might be needed for complex SPAs
+            # This check is now less critical as form_sections check is done after each action in executor
+            # but keeping it as a fallback.
             new_url = driver.current_url
             new_html_len = len(driver.page_source)
             if new_url == current_url and new_html_len == len(current_html):
@@ -234,19 +231,15 @@ def main():
             else:
                  print("Page content updated.")
 
+
             # Add a Smart Loop Exit (Fail-Safe)
             # Check for too many identical file upload steps
+            html_after_actions = driver.page_source.lower() # Need to get current page source again
             if step_counter > 4 and html_after_actions.count("resume") > 3 and html_after_actions.count("cover letter") > 3:
                 print("⚠️ Repeated upload step detected multiple times. Assuming the form is stuck. Ending.")
                 break
             # End Smart Loop Exit
 
-            # Prevent infinite loops by tracking page states (using URL and content length hash)
-            state_signature = hash(driver.current_url + "_" + str(len(driver.page_source)))
-            if state_signature in visited_states:
-                print("Detected a repeating page state (possible loop). Ending automation.")
-                break
-            visited_states.add(state_signature)
 
             # Increment step counter
             step_counter += 1
@@ -260,8 +253,6 @@ def main():
         print(f"[Error] An unexpected exception occurred during the application process: {e}")
 
     finally:
-        # Optional: Keep the browser open for inspection after completion or error
-        # input("Press Enter to close the browser...")
         driver.quit()
         print("Browser closed.")
 
