@@ -1,4 +1,3 @@
-
 # page_capture.py (final version with structured paths and slugged titles)
 import os
 from selenium.webdriver.common.by import By
@@ -34,13 +33,8 @@ def save_page_snapshot(driver, job_id, job_title, step):
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html_content)
 
-    # Adjust window size to page size for full screenshot
-    try:
-        width = driver.execute_script("return document.body.parentNode.scrollWidth")
-        height = driver.execute_script("return document.body.parentNode.scrollHeight")
-        driver.set_window_size(width, height)
-    except Exception as e:
-        print(f"[Warning] Could not resize window: {e}")
+    # Disable window resizing
+    # driver.set_window_size(1920, 1080)  # Comment out or remove this line
 
     # Take full-page screenshot
     try:

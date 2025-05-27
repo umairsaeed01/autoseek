@@ -15,7 +15,9 @@ from page_capture import save_page_snapshot
 from analyze_form import analyze_form_page
 from playbook_manager import load_playbook, save_playbook
 from playbook_executor import execute_playbook_actions
-from llm_agent import analyze_page_with_context
+from llm_agent import analyze_page_with_context, generate_playbook # Import generate_playbook as well
+from openai import OpenAI # Import OpenAI client
+from html_processor import extract_form_sections # Import extract_form_sections
 
 RESUME_PATH = os.path.abspath("./resume.pdf")
 COVER_LETTER_PATH = os.path.abspath("./cover_letter.pdf")
@@ -46,8 +48,11 @@ def main():
     resume_uploaded = False
     cover_letter_uploaded = False
 
+    # Initialize OpenAI client
+    client = OpenAI()
+
     try:
-        job_url = "https://www.seek.com.au/job/83589298"
+        job_url = "https://www.seek.com.au/job/84113162"
         print(f"Opening job page: {job_url}")
         driver.get(job_url)
 
@@ -92,11 +97,15 @@ def main():
 
             if not playbook or 'actions' not in playbook:
                 print("No playbook found. Generating new actions...")
-                new_actions = analyze_form_page(current_html[:400000], screenshot_path)
-                if new_actions:
-                    playbook = {"actions": new_actions}
+                # Extract sections from the current HTML
+                current_sections = extract_form_sections(current_html)
+                # Pass the client and extracted sections to generate_playbook
+                new_actions = generate_playbook(client, current_sections, screenshot_path)
+                if new_actions and "actions" in new_actions: # Check for "actions" key
+                    # Ensure we save the correct structure: {"actions": [...]}
+                    playbook = {"actions": new_actions.get("actions", [])}
                     save_playbook(domain, playbook)
-                    actions_to_execute = new_actions
+                    actions_to_execute = playbook["actions"] # Get actions from the correctly structured playbook
                 else:
                     print("LLM failed to generate actions.")
                     break
@@ -117,16 +126,21 @@ def main():
                 if "cover letter" in field.lower() and cover_letter_uploaded:
                     continue
 
-                success = execute_playbook_actions(driver, [action], RESUME_PATH, COVER_LETTER_PATH)
+                # Pass client as the first argument
+                print(f"Type of client before calling execute_playbook_actions: {type(client)}")
+                success = execute_playbook_actions(client, driver, [action], RESUME_PATH, COVER_LETTER_PATH)
                 executed_action_keys.add(f"{action['action']}|{action['selector']}|action.get('value')")
 
                 post_html_path, post_screenshot_path = save_page_snapshot(driver, job_id, job_title, f"post_action_{idx+1}_{field.replace(' ', '_')}")
                 post_html = open(post_html_path, encoding="utf-8").read()
 
                 print("Analyzing effect of last action with LLM...")
-                summary_analysis = analyze_page_with_context(post_html[:400000], post_screenshot_path)
-                print(f"\n🖼️ Screenshot summary:\n{post_screenshot_path}")
-                print(f"🧾 HTML summary:\n{post_html_path}")
+                # Extract sections from the post-action HTML
+                post_sections = extract_form_sections(post_html)
+                # Pass the client and extracted sections to analyze_page_with_context
+                summary_analysis = analyze_page_with_context(client, post_sections)
+                # Removed screenshot summary printout
+                print(f"🧾 Page sections from:\n{post_html_path}")
                 print(f"🔮 LLM-suggested next action:\n{summary_analysis}\n")
 
                 summary_text = summary_analysis.get("summary", "").lower()

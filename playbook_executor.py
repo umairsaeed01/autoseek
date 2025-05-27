@@ -5,7 +5,7 @@ from page_capture import save_page_snapshot
 from llm_agent import analyze_page_with_context # Import the correct LLM analysis function
 import html_processor
  
-def execute_playbook_actions(driver, actions, resume_path, cover_letter_path):
+def execute_playbook_actions(client, driver, actions, resume_path, cover_letter_path):
     resume_uploaded = False
     cover_letter_uploaded = False
  
@@ -19,7 +19,12 @@ def execute_playbook_actions(driver, actions, resume_path, cover_letter_path):
  
         try:
             # Determine how to find the element
-            element = driver.find_element(By.XPATH, selector) if action.get("use_xpath") else driver.find_element(By.CSS_SELECTOR, selector)
+            if action.get("field") == "resume file":
+                element = driver.find_element(By.ID, "resume-fileFile")
+            elif action.get("field") == "cover letter file":
+                element = driver.find_element(By.ID, "coverLetter-fileFile")
+            else:
+                element = driver.find_element(By.XPATH, selector) if action.get("use_xpath") else driver.find_element(By.CSS_SELECTOR, selector)
  
             if action_type == "click":
                 try:
@@ -56,8 +61,10 @@ def execute_playbook_actions(driver, actions, resume_path, cover_letter_path):
             try:
                 print("Analyzing effect of last action with LLM...")
                 # Call the correct LLM function and expect a dictionary
-                result = get_smart_step_summary(current_html, screenshot_path)
- 
+                # Extract sections from the current HTML
+                current_sections = html_processor.extract_form_sections(current_html)
+                result = analyze_page_with_context(client, current_sections, screenshot_path)
+
                 if isinstance(result, dict):
                     print(f"🖼️ Screenshot summary: {result.get('screenshot_summary', 'N/A')}")
                     print(f"🧾 HTML summary: {result.get('html_summary', 'N/A')}")
