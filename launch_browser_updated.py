@@ -26,6 +26,24 @@ def debug_print(message, level="INFO"):
     """Helper function for consistent debug output"""
     print(f"[{level}] {message}")
 
+def dispatch_profile_page_if_needed(driver):
+    """
+    If we're on /apply/profile, call profile_handler
+    and return True so calling code can bail out.
+    """
+    # small pause to let URL update
+    time.sleep(0.5)
+    if "/apply/profile" in driver.current_url:
+        print("[Dispatcher] Detected profile page, dispatching to handler")
+        # delegate all profile‐page work out
+        from profile_handler import handle_profile_page
+        if handle_profile_page(driver):
+            print("[Dispatcher] Profile page handled successfully")
+            return True
+        else:
+            print("[Dispatcher] Profile page handling failed")
+    return False
+
 def try_click_continue(driver):
     """Try to click the continue button using multiple selectors"""
     selectors = [
@@ -47,6 +65,11 @@ def try_click_continue(driver):
             # Click button
             button.click()
             print(f"[SUCCESS] Clicked continue button using selector: {selector}")
+            
+            # Check if we need to dispatch to profile handler
+            if dispatch_profile_page_if_needed(driver):
+                return True
+                
             return True
         except Exception as e:
             print(f"[DEBUG] Could not click continue button with selector {selector}: {e}")
@@ -125,13 +148,21 @@ def main():
                 # Try to click continue button after uploads
                 if try_click_continue(driver):
                     debug_print("Successfully clicked continue button after uploads", "SUCCESS")
-                    break
+                    # Check if we need to dispatch to profile handler
+                    if dispatch_profile_page_if_needed(driver):
+                        debug_print("Handed off to profile handler, exiting main loop", "SUCCESS")
+                        break
                 else:
                     debug_print("Could not find continue button, continuing with normal flow", "WARNING")
 
             current_url = driver.current_url
             domain = urlparse(current_url).netloc
             debug_print(f"Current URL: {current_url}", "INFO")
+
+            # Check if we need to dispatch to profile handler
+            if dispatch_profile_page_if_needed(driver):
+                debug_print("Handed off to profile handler, exiting main loop", "SUCCESS")
+                break
 
             # Improved state detection
             current_state = hash(current_url + "_" + str(len(driver.page_source)))
@@ -188,6 +219,11 @@ def main():
 
                 success = execute_playbook_actions(driver, [action], RESUME_PATH, COVER_LETTER_PATH)
                 executed_action_keys.add(f"{action['action']}|{action['selector']}|{action.get('value', '')}")
+
+                # Check if we need to dispatch to profile handler after each action
+                if dispatch_profile_page_if_needed(driver):
+                    debug_print("Handed off to profile handler, exiting action loop", "SUCCESS")
+                    return
 
                 post_html_path, post_screenshot_path = save_page_snapshot(driver, job_id, job_title, f"post_action_{idx+1}_{field.replace(' ', '_')}")
                 post_html = open(post_html_path, encoding="utf-8").read()

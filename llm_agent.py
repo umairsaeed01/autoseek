@@ -505,21 +505,12 @@ def execute_actions(driver, actions):
             if action["action"] == "click":
                 # Handle multiple selectors for continue button
                 if "continue" in action.get("field", "").lower():
-                    clicked = False
-                    for selector in action.get("selectors", [action["selector"]]):
-                        try:
-                            element = WebDriverWait(driver, 5).until(
-                                EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
-                            )
-                            element.click()
-                            clicked = True
-                            print(f"[Executor] Clicked continue button with selector: {selector}")
-                            break
-                        except:
-                            continue
-                    if not clicked:
-                        print("[Executor] Could not click any continue button")
-                        continue
+                    # Use the new dispatcher for continue button clicks
+                    from launch_browser_updated import click_continue_and_dispatch
+                    if click_continue_and_dispatch(driver):
+                        print("[Executor] Dispatched to profile handler, exiting action loop")
+                        return  # Exit the action loop
+                    continue
                 else:
                     element = WebDriverWait(driver, 10).until(
                         EC.element_to_be_clickable((By.CSS_SELECTOR, action["selector"]))
