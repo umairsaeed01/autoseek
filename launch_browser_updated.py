@@ -26,22 +26,34 @@ def debug_print(message, level="INFO"):
     """Helper function for consistent debug output"""
     print(f"[{level}] {message}")
 
-def dispatch_profile_page_if_needed(driver):
+def dispatch_special_pages(driver):
     """
-    If we're on /apply/profile, call profile_handler
-    and return True so calling code can bail out.
+    After any Continue click, check if we're on a special page
+    (profile or review). If so, call its handler and return True.
     """
-    # small pause to let URL update
-    time.sleep(0.5)
-    if "/apply/profile" in driver.current_url:
+    time.sleep(0.5)  # give the browser a moment to navigate
+    url = driver.current_url
+
+    if "/apply/profile" in url:
         print("[Dispatcher] Detected profile page, dispatching to handler")
-        # delegate all profile‐page work out
         from profile_handler import handle_profile_page
         if handle_profile_page(driver):
             print("[Dispatcher] Profile page handled successfully")
             return True
         else:
             print("[Dispatcher] Profile page handling failed")
+            return False
+
+    if "/apply/review" in url:
+        print("[Dispatcher] Detected review page, dispatching to handler")
+        from review_handler import handle_review_page
+        if handle_review_page(driver):
+            print("[Dispatcher] Review page handled successfully")
+            return True
+        else:
+            print("[Dispatcher] Review page handling failed")
+            return False
+
     return False
 
 def try_click_continue(driver):
@@ -66,8 +78,8 @@ def try_click_continue(driver):
             button.click()
             print(f"[SUCCESS] Clicked continue button using selector: {selector}")
             
-            # Check if we need to dispatch to profile handler
-            if dispatch_profile_page_if_needed(driver):
+            # Check if we need to dispatch to special page handler
+            if dispatch_special_pages(driver):
                 return True
                 
             return True
@@ -148,9 +160,9 @@ def main():
                 # Try to click continue button after uploads
                 if try_click_continue(driver):
                     debug_print("Successfully clicked continue button after uploads", "SUCCESS")
-                    # Check if we need to dispatch to profile handler
-                    if dispatch_profile_page_if_needed(driver):
-                        debug_print("Handed off to profile handler, exiting main loop", "SUCCESS")
+                    # Check if we need to dispatch to special page handler
+                    if dispatch_special_pages(driver):
+                        debug_print("Handed off to special page handler, exiting main loop", "SUCCESS")
                         break
                 else:
                     debug_print("Could not find continue button, continuing with normal flow", "WARNING")
@@ -159,9 +171,9 @@ def main():
             domain = urlparse(current_url).netloc
             debug_print(f"Current URL: {current_url}", "INFO")
 
-            # Check if we need to dispatch to profile handler
-            if dispatch_profile_page_if_needed(driver):
-                debug_print("Handed off to profile handler, exiting main loop", "SUCCESS")
+            # Check if we need to dispatch to special page handler
+            if dispatch_special_pages(driver):
+                debug_print("Handed off to special page handler, exiting main loop", "SUCCESS")
                 break
 
             # Improved state detection
@@ -220,36 +232,14 @@ def main():
                 success = execute_playbook_actions(driver, [action], RESUME_PATH, COVER_LETTER_PATH)
                 executed_action_keys.add(f"{action['action']}|{action['selector']}|{action.get('value', '')}")
 
-                # Check if we need to dispatch to profile handler after each action
-                if dispatch_profile_page_if_needed(driver):
-                    debug_print("Handed off to profile handler, exiting action loop", "SUCCESS")
-                    return
-
-                post_html_path, post_screenshot_path = save_page_snapshot(driver, job_id, job_title, f"post_action_{idx+1}_{field.replace(' ', '_')}")
-                post_html = open(post_html_path, encoding="utf-8").read()
-
-                debug_print("Analyzing effect of last action with LLM...", "INFO")
-                post_sections = extract_form_sections(post_html)
-                summary_analysis = analyze_page_with_context(driver, {
-                    "sections": post_sections,
-                    "current_step": step_counter,
-                    "action": action
-                })
-                debug_print(f"Page sections from: {post_html_path}", "INFO")
-                debug_print(f"LLM-suggested next action: {summary_analysis}", "INFO")
-
-                summary_text = summary_analysis.get("summary", "").lower()
-                if "resume uploaded" in summary_text:
-                    upload_states['resume'] = True
-                    debug_print("Resume upload confirmed", "SUCCESS")
-                if "cover letter uploaded" in summary_text:
-                    upload_states['cover_letter'] = True
-                    debug_print("Cover letter upload confirmed", "SUCCESS")
-                if "error" in summary_text:
-                    debug_print("LLM reported an error, stopping.", "ERROR")
+                # Check if we need to dispatch to special page handler after each action
+                if dispatch_special_pages(driver):
+                    debug_print("Handed off to special page handler, exiting action loop", "SUCCESS")
                     break
 
-                time.sleep(2)
+            # Handle any remaining special pages in sequence (profile → review)
+            while dispatch_special_pages(driver):
+                pass
 
             step_counter += 1
 
