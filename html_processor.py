@@ -12,6 +12,27 @@ def extract_form_sections(html_content):
     for tag in soup.find_all(['script', 'style', 'noscript', 'header', 'footer', 'nav', 'aside']):
         tag.decompose()
 
+    # Handle iframes
+    iframes = soup.find_all('iframe')
+    for iframe in iframes:
+        iframe_content = iframe.get('srcdoc') or iframe.get('src')
+        if iframe_content:
+            try:
+                iframe_soup = BeautifulSoup(iframe_content, "html.parser")
+                # Add iframe content to main soup
+                iframe.replace_with(iframe_soup)
+            except Exception as e:
+                print(f"[Warning] Could not parse iframe content: {e}")
+
+    # Handle dynamic content
+    dynamic_elements = soup.find_all(['div', 'button'], attrs={'data-dynamic': True})
+    for elem in dynamic_elements:
+        elem['data-visible'] = 'true'
+        # Add continue button specific handling
+        if elem.get('data-testid') == 'continue-button':
+            elem['data-visible'] = 'true'
+            elem['data-clickable'] = 'true'
+
     sections = []
 
     # Find form sections via <fieldset> or <form> tags
@@ -30,6 +51,13 @@ def extract_form_sections(html_content):
             section_text = _process_section(section_container)
             if section_text:
                 sections.append(section_text)
+
+    # Add continue button section if found
+    continue_button = soup.find('button', attrs={'data-testid': 'continue-button'})
+    if continue_button:
+        continue_section = _process_section(continue_button)
+        if continue_section:
+            sections.append(continue_section)
 
     return sections
 
@@ -97,16 +125,20 @@ def _process_section(section_element):
                 placeholder += f", placeholder={ph}"
             placeholder += "]"
         elif tag_name == 'button':
-            # Only include meaningful buttons (e.g., submit)
-            btn_type = inp.get('type', 'button')
-            btn_text = inp.get_text(strip=True)
-            # If it's a submit or next button, include it; otherwise skip minor buttons
-            if btn_type in ['submit', 'button'] and btn_text:
-                placeholder = f"[BUTTON: {btn_text}]"
+            # Special handling for continue button
+            if inp.get('data-testid') == 'continue-button':
+                placeholder = "[BUTTON: Continue]"
             else:
-                # If no text or not a submit, skip it
-                inp.decompose()
-                continue
+                # Only include meaningful buttons (e.g., submit)
+                btn_type = inp.get('type', 'button')
+                btn_text = inp.get_text(strip=True)
+                # If it's a submit or next button, include it; otherwise skip minor buttons
+                if btn_type in ['submit', 'button'] and btn_text:
+                    placeholder = f"[BUTTON: {btn_text}]"
+                else:
+                    # If no text or not a submit, skip it
+                    inp.decompose()
+                    continue
         elif tag_name == 'select':
             # Summarize select options
             name = inp.get('name')
@@ -147,3 +179,56 @@ def _process_section(section_element):
         # Prepend the section title as a header
         section_text = title + ":\n" + section_text
     return section_text.strip()
+
+def extract_page_sections(html_content):
+    """
+    Extract sections from HTML content, focusing on upload-related sections.
+    Each section is truncated to avoid token limit issues.
+    """
+    try:
+        # Parse HTML
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Remove script and style elements
+        for script in soup(["script", "style"]):
+            script.decompose()
+            
+        # Get all form elements and their containers
+        sections = []
+        MAX_SECTION_LEN = 2000  # Maximum length for any section
+        
+        # Find all form elements
+        forms = soup.find_all('form')
+        for form in forms:
+            # Get form's parent container
+            container = form.find_parent('div', class_=lambda x: x and ('container' in x.lower() or 'section' in x.lower()))
+            if container:
+                section_text = container.get_text(separator=' ', strip=True)
+                if len(section_text) > MAX_SECTION_LEN:
+                    section_text = section_text[:MAX_SECTION_LEN] + "..."
+                sections.append(section_text)
+                
+        # Find upload-related divs
+        upload_keywords = ['resume', 'cover', 'upload', 'file', 'document']
+        for div in soup.find_all('div'):
+            # Check if div contains upload-related keywords
+            if any(keyword in div.get_text().lower() for keyword in upload_keywords):
+                section_text = div.get_text(separator=' ', strip=True)
+                if len(section_text) > MAX_SECTION_LEN:
+                    section_text = section_text[:MAX_SECTION_LEN] + "..."
+                sections.append(section_text)
+                
+        # If no sections found, get main content
+        if not sections:
+            main = soup.find('main') or soup.find('div', role='main')
+            if main:
+                section_text = main.get_text(separator=' ', strip=True)
+                if len(section_text) > MAX_SECTION_LEN:
+                    section_text = section_text[:MAX_SECTION_LEN] + "..."
+                sections.append(section_text)
+                
+        return sections
+        
+    except Exception as e:
+        print(f"Error extracting page sections: {e}")
+        return []

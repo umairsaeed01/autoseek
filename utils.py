@@ -24,7 +24,10 @@ def save_snapshot(driver, step_name):
 
 def analyze_state_with_llm(driver):
     html_path, image_path = save_snapshot(driver, step_name=f"analyze_{int(time.time())}")
-    response_text = analyze_page_with_context(html_path, image_path) # Call the new function
+    response_text = analyze_page_with_context(driver, {
+        "html_path": html_path,
+        "image_path": image_path
+    })
 
     return {
         "screenshot": image_path,

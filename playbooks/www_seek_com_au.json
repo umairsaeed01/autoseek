@@ -3,78 +3,29 @@
     {
       "action": "click",
       "selector": "input[name='resume-method'][value='upload']",
-      "field": "Select upload resume option",
-      "use_xpath": false
+      "field": "select resume upload"
     },
     {
       "action": "upload",
-      "selector": "input[type='file']",
+      "selector": "input[name='file'][data-field='resume']",
       "field": "resume file",
-      "value": "[RESUME_PATH]",
-      "use_xpath": false
-    },
-    {
-      "action": "click",
-      "selector": "//button[contains(text(), 'Upload')]",
-      "field": "Upload resume button",
-      "use_xpath": true
+      "value": "[RESUME_PATH]"
     },
     {
       "action": "click",
       "selector": "input[name='coverLetter-method'][value='upload']",
-      "field": "Select upload cover letter option",
-      "use_xpath": false
+      "field": "select cover letter upload"
     },
     {
       "action": "upload",
-      "selector": "input[type='file']",
+      "selector": "input[name='file'][data-field='cover_letter']",
       "field": "cover letter file",
-      "value": "[COVER_LETTER_PATH]",
-      "use_xpath": false
+      "value": "[COVER_LETTER_PATH]"
     },
     {
       "action": "click",
-      "selector": "//button[contains(text(), 'Upload')]",
-      "field": "Upload cover letter button",
-      "use_xpath": true
-    },
-    {
-      "action": "click",
-      "selector": "input[type='radio'][name='resume-method'][value='upload']",
-      "field": "Select upload resume option",
-      "use_xpath": false
-    },
-    {
-      "action": "upload",
-      "selector": "input[type='file']",
-      "field": "resume file",
-      "value": "[RESUME_PATH]",
-      "use_xpath": false
-    },
-    {
-      "action": "click",
-      "selector": "//button[contains(text(), 'Upload')]",
-      "field": "Upload resume button",
-      "use_xpath": true
-    },
-    {
-      "action": "click",
-      "selector": "input[type='radio'][name='coverLetter-method'][value='upload']",
-      "field": "Select upload cover letter option",
-      "use_xpath": false
-    },
-    {
-      "action": "upload",
-      "selector": "input[type='file']",
-      "field": "cover letter file",
-      "value": "[COVER_LETTER_PATH]",
-      "use_xpath": false
-    },
-    {
-      "action": "click",
-      "selector": "//button[contains(text(), 'Upload')]",
-      "field": "Upload cover letter button",
-      "use_xpath": true
+      "selector": "button[data-testid='continue-button']",
+      "field": "continue button"
     }
   ]
 }

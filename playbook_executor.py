@@ -1,11 +1,13 @@
 import time
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import ElementNotInteractableException, NoSuchElementException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import ElementNotInteractableException, NoSuchElementException, TimeoutException
 from page_capture import save_page_snapshot
-from llm_agent import analyze_page_with_context # Import the correct LLM analysis function
+from llm_agent import analyze_page_with_context
 import html_processor
  
-def execute_playbook_actions(client, driver, actions, resume_path, cover_letter_path):
+def execute_playbook_actions(driver, actions, resume_path, cover_letter_path):
     resume_uploaded = False
     cover_letter_uploaded = False
  
@@ -15,14 +17,21 @@ def execute_playbook_actions(client, driver, actions, resume_path, cover_letter_
         field = action.get("field", "Unknown field")
         value = action.get("value", "")
  
-        print(f"\\nExecuting action {idx+1}: {action_type} - {field}")
+        print(f"\nExecuting action {idx+1}: {action_type} - {field}")
  
         try:
             # Determine how to find the element
             if action.get("field") == "resume file":
                 element = driver.find_element(By.ID, "resume-fileFile")
             elif action.get("field") == "cover letter file":
-                element = driver.find_element(By.ID, "coverLetter-fileFile")
+                # Wait for the cover letter file input to be present and interactable
+                try:
+                    element = WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.ID, "coverLetter-fileFile"))
+                    )
+                except TimeoutException:
+                    print("Cover letter file input not found, trying alternative selector...")
+                    element = driver.find_element(By.CSS_SELECTOR, "input[type='file'][data-testid='cover-letter-upload']")
             else:
                 element = driver.find_element(By.XPATH, selector) if action.get("use_xpath") else driver.find_element(By.CSS_SELECTOR, selector)
  
@@ -60,10 +69,12 @@ def execute_playbook_actions(client, driver, actions, resume_path, cover_letter_
             # Analyze step via LLM
             try:
                 print("Analyzing effect of last action with LLM...")
-                # Call the correct LLM function and expect a dictionary
                 # Extract sections from the current HTML
                 current_sections = html_processor.extract_form_sections(current_html)
-                result = analyze_page_with_context(client, current_sections, screenshot_path)
+                result = analyze_page_with_context(driver, {
+                    "sections": current_sections,
+                    "current_step": idx + 1
+                })
 
                 if isinstance(result, dict):
                     print(f"🖼️ Screenshot summary: {result.get('screenshot_summary', 'N/A')}")
@@ -75,14 +86,10 @@ def execute_playbook_actions(client, driver, actions, resume_path, cover_letter_
                          return True
                 else:
                     print(f"❌ LLM analysis failed or returned unexpected format: {result}")
-                    # Decide how to handle unexpected LLM response - break or continue?
-                    # For now, continue but log the issue
                     pass
  
             except Exception as llm_error:
                 print(f"❌ LLM Error during analysis: {llm_error}")
-                # Decide how to handle LLM errors - break or continue?
-                # For now, continue but log the issue
                 pass
  
         except NoSuchElementException:
