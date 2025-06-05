@@ -28,12 +28,27 @@ def debug_print(message, level="INFO"):
 
 def dispatch_special_pages(driver):
     """
-    After any Continue click, check if we're on a special page
-    (profile or review). If so, call its handler and return True.
+    After any Continue click, check if we're on a "special" page:
+      • /apply/role-requirements  → call role_requirements_handler
+      • /apply/profile            → call profile_handler
+      • /apply/review             → call review_handler
+    Returns True if we dispatched (so the main loop should break/stop).
     """
-    time.sleep(0.5)  # give the browser a moment to navigate
+    time.sleep(0.5)  # allow URL to settle
     url = driver.current_url
 
+    # 1) Role Requirements page
+    if "/apply/role-requirements" in url:
+        print("[Dispatcher] Detected role-requirements page, dispatching to handler")
+        from role_requirements_handler import handle_role_requirements_page
+        if handle_role_requirements_page(driver):
+            print("[Dispatcher] Role-requirements done")
+            return True
+        else:
+            print("[Dispatcher] Role-requirements handling failed")
+            return False
+
+    # 2) Profile page
     if "/apply/profile" in url:
         print("[Dispatcher] Detected profile page, dispatching to handler")
         from profile_handler import handle_profile_page
@@ -44,6 +59,7 @@ def dispatch_special_pages(driver):
             print("[Dispatcher] Profile page handling failed")
             return False
 
+    # 3) Review page
     if "/apply/review" in url:
         print("[Dispatcher] Detected review page, dispatching to handler")
         from review_handler import handle_review_page
@@ -121,7 +137,7 @@ def main():
     client = OpenAI()
 
     try:
-        job_url = "https://www.seek.com.au/job/84113162"
+        job_url = "https://www.seek.com.au/job/84205470/"
         debug_print(f"Opening job page: {job_url}")
         driver.get(job_url)
 
@@ -237,7 +253,7 @@ def main():
                     debug_print("Handed off to special page handler, exiting action loop", "SUCCESS")
                     break
 
-            # Handle any remaining special pages in sequence (profile → review)
+            # Handle any remaining special pages in sequence (role-requirements → profile → review)
             while dispatch_special_pages(driver):
                 pass
 
