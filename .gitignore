@@ -1,1 +1,3 @@
+# Ignore generated resources
+resources/
 .env

@@ -134,7 +134,7 @@ def main():
     client = OpenAI()
 
     try:
-        job_url = "https://www.seek.com.au/job/84259847"
+        job_url = "https://www.seek.com.au/job/84523589"
         debug_print(f"Opening job page: {job_url}")
         driver.get(job_url)
 
