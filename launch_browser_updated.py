@@ -18,6 +18,7 @@ from playbook_executor import execute_playbook_actions
 from llm_agent import analyze_page_with_context, generate_playbook
 from openai import OpenAI
 from html_processor import extract_form_sections
+from dynamic_handler import handle_dynamic_questions
 
 RESUME_PATH = os.path.abspath("./resume.pdf")
 COVER_LETTER_PATH = os.path.abspath("./cover_letter.pdf")
@@ -40,13 +41,9 @@ def dispatch_special_pages(driver):
     # 1) Role Requirements page
     if "/apply/role-requirements" in url:
         print("[Dispatcher] Detected role-requirements page, dispatching to handler")
-        from role_requirements_handler import handle_role_requirements_page
-        if handle_role_requirements_page(driver):
-            print("[Dispatcher] Role-requirements done")
-            return True
-        else:
-            print("[Dispatcher] Role-requirements handling failed")
-            return False
+        if not handle_dynamic_questions(driver):
+            raise RuntimeError("Dynamic handler failed to fill the form.")
+        return True
 
     # 2) Profile page
     if "/apply/profile" in url:
@@ -137,7 +134,7 @@ def main():
     client = OpenAI()
 
     try:
-        job_url = "https://www.seek.com.au/job/84205470/"
+        job_url = "https://www.seek.com.au/job/84259847"
         debug_print(f"Opening job page: {job_url}")
         driver.get(job_url)
 

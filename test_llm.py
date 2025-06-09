@@ -138,6 +138,22 @@ def interact_with_openai_llm():
             max_tokens=max_tokens
         )
 
+        # ——— GPT-3.5-turbo usage logging ———
+        try:
+            usage = response.usage
+            pt = usage.prompt_tokens
+            ct = usage.completion_tokens
+            tt = usage.total_tokens
+            ir, orate = (0.03, 0.06) if model.startswith("gpt-4") else (0.0015, 0.002)
+            ic = pt * ir / 1000
+            oc = ct * orate / 1000
+            tc = ic + oc
+            print(f"[{model} usage] prompt={pt}, completion={ct}, total={tt} tokens;"
+                  f" cost_input=${ic:.4f}, cost_output=${oc:.4f}, cost_total=${tc:.4f}")
+        except Exception:
+            print(f"[{model} usage] ⚠️ failed to read response.usage")
+        # ———————————————————————
+
         # Print the response
         print("\nOpenAI API analysis successful:")
         print(response.choices[0].message.content)

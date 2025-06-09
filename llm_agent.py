@@ -13,7 +13,7 @@ load_dotenv()
 # The OpenAI client will automatically look for the OPENAI_API_KEY environment variable
 # We will pass the client instance to the functions that need it.
 
-# MODEL_NAME = "gpt-4o" # Or another suitable OpenAI model
+# MODEL_NAME = "gpt-3.5-turbo" # Or another suitable OpenAI model
 # MAX_CHARS_SINGLE = 15000 # Keep this if needed for context splitting, but OpenAI handles larger contexts
 
 def sanitize_actions(actions):
@@ -58,7 +58,7 @@ def sanitize_actions(actions):
     return valid
 
 # Modified to accept OpenAI client instance
-def generate_playbook(client: OpenAI, sections, screenshot_path=None, model="gpt-4-turbo-preview"):
+def generate_playbook(client: OpenAI, sections, screenshot_path=None, model="gpt-3.5-turbo"):
     # First check if we have a valid cached playbook
     cached_playbook = load_cached_playbook()
     if cached_playbook and is_valid_playbook(cached_playbook):
@@ -150,6 +150,22 @@ Generate actions in this JSON format:
             temperature=0,
             response_format={"type": "json_object"}
         )
+
+        # ——— GPT-3.5-turbo usage logging ———
+        try:
+            usage = response.usage
+            pt = usage.prompt_tokens
+            ct = usage.completion_tokens
+            tt = usage.total_tokens
+            ir, orate = (0.03, 0.06) if model.startswith("gpt-4") else (0.0015, 0.002)
+            ic = pt * ir / 1000
+            oc = ct * orate / 1000
+            tc = ic + oc
+            print(f"[{model} usage] prompt={pt}, completion={ct}, total={tt} tokens;"
+                  f" cost_input=${ic:.4f}, cost_output=${oc:.4f}, cost_total=${tc:.4f}")
+        except Exception:
+            print(f"[{model} usage] ⚠️ failed to read response.usage")
+        # ———————————————————————
 
         content = response.choices[0].message.content
         print(f"Raw LLM output (generate_playbook): '{content}'")
@@ -279,13 +295,14 @@ def _parse_json(text):
 
 
 # Modified to accept OpenAI client instance
-def analyze_page_with_context(driver, context):
+def analyze_page_with_context(driver, context, model="gpt-3.5-turbo"):
     """
     Analyze the current page state and suggest next action.
     
     Args:
         driver: Selenium WebDriver instance
         context: Dictionary containing context about the current state
+        model: The OpenAI model to use (default: "gpt-3.5-turbo")
     """
     try:
         # Get page content
@@ -352,7 +369,7 @@ def analyze_page_with_context(driver, context):
         # Call LLM to analyze the page
         client = OpenAI()
         response = client.chat.completions.create(
-            model="gpt-4-turbo-preview",
+            model=model,
             messages=[
                 {"role": "system", "content": """You are an expert at analyzing web pages and determining the next actions needed to complete a task.
                 You will be given the page content, visible text, input fields, buttons, and context about what we're trying to do.
@@ -391,6 +408,22 @@ def analyze_page_with_context(driver, context):
             max_tokens=1000,
             response_format={"type": "json_object"}
         )
+
+        # ——— GPT-3.5-turbo usage logging ———
+        try:
+            usage = response.usage
+            pt = usage.prompt_tokens
+            ct = usage.completion_tokens
+            tt = usage.total_tokens
+            ir, orate = (0.03, 0.06) if model.startswith("gpt-4") else (0.0015, 0.002)
+            ic = pt * ir / 1000
+            oc = ct * orate / 1000
+            tc = ic + oc
+            print(f"[{model} usage] prompt={pt}, completion={ct}, total={tt} tokens;"
+                  f" cost_input=${ic:.4f}, cost_output=${oc:.4f}, cost_total=${tc:.4f}")
+        except Exception:
+            print(f"[{model} usage] ⚠️ failed to read response.usage")
+        # ———————————————————————
 
         # Parse the response
         try:

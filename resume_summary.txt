@@ -1,4 +1,26 @@
-Software engineer with 3 years of full-stack JavaScript and Python experience.
-Graduate temporary work visa (subclass 485), right to work in Australia until 2027.
-Current Police Check valid.
-Notice period: None, ready to start immediately. 
+Education:
+- Master of Data Science, Deakin University, Melbourne, VIC (July 2022 - Present)
+- Bachelors of Software Engineering, Bahria University, Islamabad, VIC (July 2018)
+
+Employment History:
+- Cyber Security Intern at WE CLAN, Melbourne, VIC (April 2024 - July 2024)
+
+Projects:
+1. AI-POWERED DENTAL APPOINTMENT SCHEDULER
+2. AI-GENERATED NO-CODE WEBSITE
+3. LEARNING INSIGHT REPORT
+4. INTERACTIVE MEDICAL DATA DASHBOARD
+
+Skills:
+Hard Skills:
+- Programming Languages: Python, C#, C++, C, SQL, PL/SQL
+- AI and Software Development: AI Engineering, Large Language Models (LLMs), Microservices, RESTful APIs
+- Cloud and Database Technologies: AWS, Azure, Oracle Database, ETL, Data Modeling
+- Tools & Technologies: FastAPI, Flask, Tableau, Power BI
+
+Soft Skills:
+- Stakeholder Collaboration
+- Analytical Thinking
+- Problem Solving
+- Time Management
+- Cross-Functional Teamwork
